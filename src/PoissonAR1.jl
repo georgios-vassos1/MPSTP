@@ -44,11 +44,11 @@ Calculate the probabilities of the observed Poisson AR(1) time series.
 function calculate_probabilities(Y::Vector{Int}, alpha::Float64, beta::Float64) :: Vector{Float64}
     n = length(Y)
     probs = Vector{Float64}(undef, n)
-    probs[1] = pdf(Poisson(alpha), Y[1])  # Initial probability for Y_1
+    probs[1] = cdf(Poisson(alpha), Y[1])  # Initial probability for Y_1
     
     for t in 2:n
         lambda_t = alpha + beta * Y[t - 1]
-        probs[t] = pdf(Poisson(lambda_t), Y[t])
+        probs[t] = cdf(Poisson(lambda_t), Y[t])
     end
     
     return probs

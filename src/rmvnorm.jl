@@ -39,4 +39,5 @@ function rmvnorm(n::Int, mean::Vector{Float64}, covar::Matrix{Float64})
     end
 
     return outputMatrix
+
 end
