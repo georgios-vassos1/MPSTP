@@ -18,18 +18,18 @@ function simulate_poisson_ar1(alpha::Float64, beta::Float64, n::Int) :: Vector{I
     # Initialize the time series
     Y = Vector{Int}(undef, n)
     Y[1] = rand(Poisson(alpha))  # Initial value
-    
+
     # Simulate the Poisson AR(1) process
     for t in 2:n
         lambda_t = alpha + beta * Y[t - 1]
         Y[t] = rand(Poisson(lambda_t))
     end
-    
+
     return Y
 end
 
 """
-    calculate_probabilities(Y::Vector{Int}, alpha::Float64, beta::Float64) -> Vector{Float64}
+    convert_poisson_ar1_to_uniform(Y::Vector{Int}, alpha::Float64, beta::Float64) -> Vector{Float64}
 
 Calculate the probabilities of the observed Poisson AR(1) time series.
 
@@ -41,17 +41,17 @@ Calculate the probabilities of the observed Poisson AR(1) time series.
 # Returns
 - `Vector{Float64}`: A vector representing the probability of each observed value given the previous value.
 """
-function calculate_probabilities(Y::Vector{Int}, alpha::Float64, beta::Float64) :: Vector{Float64}
+function convert_poisson_ar1_to_uniform(Y::Vector{Int}, alpha::Float64, beta::Float64) :: Vector{Float64}
     n = length(Y)
-    probs = Vector{Float64}(undef, n)
-    probs[1] = cdf(Poisson(alpha), Y[1])  # Initial probability for Y_1
-    
+    U = Vector{Float64}(undef, n)
+    U[1] = cdf(Poisson(alpha), Y[1])  # Initial probability for Y_1
+
     for t in 2:n
         lambda_t = alpha + beta * Y[t - 1]
-        probs[t] = cdf(Poisson(lambda_t), Y[t])
+        U[t] = cdf(Poisson(lambda_t), Y[t])
     end
-    
-    return probs
+
+    return U 
 end
 
 """
@@ -68,9 +68,9 @@ Run the full Poisson AR(1) simulation and return the results in a DataFrame.
 - `DataFrame`: A DataFrame containing the time points, simulated values, and their corresponding probabilities.
 """
 function run_poisson_ar1_simulation(alpha::Float64, beta::Float64, n::Int)
-    Y = simulate_poisson_ar1(alpha, beta, n)
-    probs = calculate_probabilities(Y, alpha, beta)
-    result = DataFrame(Time = 1:n, Y = Y, Probability = probs)
-    
-    return result
+    Y  = simulate_poisson_ar1(alpha, beta, n)
+    U  = convert_poisson_ar1_to_uniform(Y, alpha, beta)
+    df = DataFrame(Time = 1:n, Y = Y, U = U)
+
+    return df 
 end
