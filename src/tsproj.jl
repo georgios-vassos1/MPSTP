@@ -13,6 +13,6 @@ include("PoissonAR1.jl")
 # Exported functions
 export greet
 export rmvnorm
-export simulate_poisson_ar1, calculate_probabilities, run_poisson_ar1_simulation
+export rpoisar1, qpoisar1, convert_poisar1_to_unif, run_poisar1_simulation
 
 end # module MyPackage

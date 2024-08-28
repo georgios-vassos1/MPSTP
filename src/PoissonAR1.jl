@@ -2,7 +2,7 @@ using Distributions
 using DataFrames
 
 """
-    simulate_poisson_ar1(alpha::Float64, beta::Float64, n::Int) -> Vector{Int}
+    rpoisar1(alpha::Float64, beta::Float64, n::Int) -> Vector{Int}
 
 Simulate a Poisson AR(1) process.
 
@@ -14,7 +14,7 @@ Simulate a Poisson AR(1) process.
 # Returns
 - `Vector{Int}`: A vector representing the simulated Poisson AR(1) time series.
 """
-function simulate_poisson_ar1(alpha::Float64, beta::Float64, n::Int) :: Vector{Int}
+function rpoisar1(alpha::Float64, beta::Float64, n::Int) :: Vector{Int}
     # Initialize the time series
     Y = Vector{Int}(undef, n)
     Y[1] = rand(Poisson(alpha))  # Initial value
@@ -29,7 +29,41 @@ function simulate_poisson_ar1(alpha::Float64, beta::Float64, n::Int) :: Vector{I
 end
 
 """
-    convert_poisson_ar1_to_uniform(Y::Vector{Int}, alpha::Float64, beta::Float64) -> Vector{Float64}
+    qpoisar1(U::Vector{Float64}, alpha::Float64, beta::Float64) -> Vector{Int}
+
+Convert uniform data to Poisson AR(1) data using the given AR(1) parameters.
+
+# Arguments
+- `U::Vector{Float64}`: The uniform random numbers (generated from a Gaussian copula or similar).
+- `alpha::Float64`: The intercept or base rate of the AR(1) process.
+- `beta::Float64`: The AR(1) coefficient.
+
+# Returns
+- `Vector{Int}`: A vector representing the Poisson AR(1) time series.
+"""
+function qpoisar1(U::Vector{Float64}, alpha::Float64, beta::Float64) :: Vector{Int}
+    n = length(U)
+
+    # Initialize the AR(1) lambda process
+    lambda = Vector{Float64}(undef, n)
+    lambda[1] = alpha / (1 - beta)  # Stationary initial value
+
+    # Generate the AR(1) process
+    for t in 2:n
+        lambda[t] = alpha + beta * lambda[t - 1]
+    end
+
+    # Convert uniform data to Poisson AR(1) data
+    poisson_ar1_data = Vector{Int}(undef, n)
+    for t in 1:n
+        poisson_ar1_data[t] = quantile(Poisson(lambda[t]), U[t])
+    end
+
+    return poisson_ar1_data
+end
+
+"""
+    convert_poisar1_to_unif(Y::Vector{Int}, alpha::Float64, beta::Float64) -> Vector{Float64}
 
 Calculate the probabilities of the observed Poisson AR(1) time series.
 
@@ -41,7 +75,7 @@ Calculate the probabilities of the observed Poisson AR(1) time series.
 # Returns
 - `Vector{Float64}`: A vector representing the probability of each observed value given the previous value.
 """
-function convert_poisson_ar1_to_uniform(Y::Vector{Int}, alpha::Float64, beta::Float64) :: Vector{Float64}
+function convert_poisar1_to_unif(Y::Vector{Int}, alpha::Float64, beta::Float64) :: Vector{Float64}
     n = length(Y)
     U = Vector{Float64}(undef, n)
     U[1] = cdf(Poisson(alpha), Y[1])  # Initial probability for Y_1
@@ -55,7 +89,7 @@ function convert_poisson_ar1_to_uniform(Y::Vector{Int}, alpha::Float64, beta::Fl
 end
 
 """
-    run_poisson_ar1_simulation(alpha::Float64, beta::Float64, n::Int) -> DataFrame
+    run_poisar1_simulation(alpha::Float64, beta::Float64, n::Int) -> DataFrame
 
 Run the full Poisson AR(1) simulation and return the results in a DataFrame.
 
@@ -67,9 +101,9 @@ Run the full Poisson AR(1) simulation and return the results in a DataFrame.
 # Returns
 - `DataFrame`: A DataFrame containing the time points, simulated values, and their corresponding probabilities.
 """
-function run_poisson_ar1_simulation(alpha::Float64, beta::Float64, n::Int)
-    Y  = simulate_poisson_ar1(alpha, beta, n)
-    U  = convert_poisson_ar1_to_uniform(Y, alpha, beta)
+function run_poisar1_simulation(alpha::Float64, beta::Float64, n::Int)
+    Y  = rpoisar1(alpha, beta, n)
+    U  = convert_poisar1_to_unif(Y, alpha, beta)
     df = DataFrame(Time = 1:n, Y = Y, U = U)
 
     return df 
