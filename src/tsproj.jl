@@ -4,6 +4,10 @@ module tsproj
 using Distributions
 using LinearAlgebra
 using Random
+using SDDP
+using JuMP
+using HiGHS
+using Gurobi
 
 # Include separate function files
 include("greet.jl")
