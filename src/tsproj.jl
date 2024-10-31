@@ -3,6 +3,7 @@ module tsproj
 # Import necessary packages
 using Distributions
 using LinearAlgebra
+using DataStructures
 using Random
 using SDDP
 using JuMP
