@@ -2,3 +2,5 @@ xx*
 *.log
 *checkpoints*
 obsolete/
+output/
+instances/
