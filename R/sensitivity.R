@@ -1,6 +1,6 @@
 library(TLPR)
 
-num_instances <- 20L
+num_instances <- 100L
 
 sims <- replicate(num_instances, new.env(), simplify = FALSE)
 for (idx in 1L:num_instances) {
@@ -55,84 +55,6 @@ genenv <- function(sim) {
   env
 }
 
-# Read instance from JSON
-json_path <- "~/tsproj/instances/instance_12x6x6x20_001.json"
-jsonlite::fromJSON(json_path) |>
-  list2env(envir = .GlobalEnv)
-
-env <- genenv(.GlobalEnv)
-
-ccx <- carrier_capacity_padded(env)
-tlx <- transition_logic(env, q = Q[seq(env$nI)], d = D[seq(env$nJ)])
-slx <- storage_limits(env, q = Q[seq(env$nI)])
-
-obj_ <- c(env$alpha, env$CTb, env$CTo[1L,], env$alpha)
-
-A   <- rbind(ccx$A, tlx$A, slx$A)
-rhs <- c(ccx$rhs, tlx$rhs, slx$rhs)
-sns <- c(ccx$sense, tlx$sense, slx$sense)
-
-model <- multiperiod_expansion(env, Q, D, A, obj_, rhs, sns)
-
-init.state <- c(entry_stock_0, c(rbind(exit_stock_0, exit_short_0)))
-model$A <- rbind(
-  Matrix::spMatrix(
-    ncol = ncol(model$A), 
-    nrow =  env$nI + 2L * env$nJ, 
-    i = 1L:(env$nI + 2L * env$nJ), 
-    j = 1L:(env$nI + 2L * env$nJ), 
-    x = rep(1L, env$nI + 2L * env$nJ)
-  ), model$A)
-model$sense <- c(rep("=", env$nI + 2L * env$nJ), model$sense)
-model$rhs   <- c(init.state, model$rhs)
-
-model$modelsense <- 'min'
-model$vtype <- rep('I', ncol(model$A))
-
-## Operations optimization
-opt <- gurobi::gurobi(model, params = list(OutputFlag = 0L))
-opt$objbound
-
-
-sddp_obj <- rhdf5::h5read("~/tsproj/output/12x6x6x20_10x1000_sims.h5", "12x6x6x20_Unif10x1500_obj_oob10e3")
-sddp_ksi <- rhdf5::h5read("~/tsproj/output/12x6x6x20_10x1000_sims.h5", "12x6x6x20_Unif10x1500_ksi_oob10e3")
-
-taux <- env$tau + 1L
-
-n <- length(sddp_obj)
-regret <- numeric(n)
-for (i in 1L:n) {
-  if ( i %% 100L == 0 ) {
-    cat(i, "\n")
-  }
-  Q <- c(t(sddp_ksi[(i - 1L) * taux + 1L:taux, 1L:6L]))
-  D <- c(t(sddp_ksi[(i - 1L) * taux + 1L:taux, 7L:12L]))
-
-  tlx <- transition_logic(env, q = Q[seq(env$nI)], d = D[seq(env$nJ)])
-  slx <- storage_limits(env, q = Q[seq(env$nI)])
-
-  A   <- rbind(ccx$A, tlx$A, slx$A)
-  rhs <- c(ccx$rhs, tlx$rhs, slx$rhs)
-
-  model <- multiperiod_expansion(env, Q, D, A, obj_, rhs, sns)
-  # Initial state constraint
-  model$A <- rbind(
-    Matrix::spMatrix(
-      ncol = ncol(model$A), 
-      nrow =  env$nI + 2L * env$nJ, 
-      i = 1L:(env$nI + 2L * env$nJ), 
-      j = 1L:(env$nI + 2L * env$nJ), 
-      x = rep(1L, env$nI + 2L * env$nJ)
-    ), model$A)
-  model$sense <- c(rep("=", env$nI + 2L * env$nJ), model$sense)
-  model$rhs   <- c(init.state, model$rhs)
-
-  opt <- gurobi::gurobi(model, params = list(OutputFlag = 0L))
-  regret[i] <- (sddp_obj[i] - opt$objbound) / opt$objbound
-}
-hist(regret, breaks = 50L, main = "Out-of-sample regret distribution (1,000 trials)", xlab = "Regret", freq = T)
-
-
 generate_model <- function(env, init.state, Q, D) {
   ccx <- carrier_capacity_padded(env)
   tlx <- transition_logic(env, q = Q[seq(env$nI)], d = D[seq(env$nJ)])
@@ -162,10 +84,6 @@ generate_model <- function(env, init.state, Q, D) {
 
   model
 }
-
-# # Sample the uncertainties
-# Q <- sample(seq(1000L, 3000L, by = 100L), env$tau * env$nI, replace = T)
-# D <- sample(seq(1000L, 3000L, by = 100L), env$tau * env$nI, replace = T)
 
 N <- 1000L
 Q <- sample(seq(1000L, 3000L, by = 100L), 12L * 6L * N, replace = TRUE) |> matrix(nrow = N)
@@ -209,11 +127,11 @@ ylim <- range(sapply(densities, function(d) d$y))
 # Initialize an empty plot with appropriate limits
 plot(NA, xlim = range(sapply(densities, function(d) d$x)),
      ylim = ylim,
-     xlab = "Total Cost (Millions)", ylab = "Density", main = "Objective across 20 instances", xaxt = "n", yaxt = "n")
+     xlab = "Total Cost", ylab = "Density", main = "Objective Densities: 100 Instances, 1000 Inflow Samples", xaxt = "n", yaxt = "n")
 
 # Add density lines in a loop
 for (i in seq_along(densities)) {
-  lines(densities[[i]], col = rgb(0.0, 0.0, 0.0, alpha = 0.4), lwd = 2L)
+  lines(densities[[i]], col = rgb(0.0, 0.0, 0.0, alpha = 0.2), lwd = 2L)
 }
 rngx <- seq(min(optx), max(optx), length.out = 20L)
 axis(1L, at = rngx, labels = round(rngx / 1e6, 1L))
@@ -231,24 +149,24 @@ mtext(expression("x"~10^6), side = 1L, line = 1L, at = par("usr")[2L])
 # model$rhs[Qdx.2] == sims[[idx]]$Q[-(11L * env$nJ + env$J_)]
 
 
-N <- 1000L
-Q <- sample(seq(1000L, 3000L, by = 100L), env$tau * env$nI * N, replace = TRUE) |> matrix(nrow = N)
-
-timex <- Sys.time()
-
-cl <- parallel::makeCluster(parallel::detectCores() - 2L)
-parallel::clusterExport(cl, c("model", "env", "Qdx.1", "Qdx.2", "Q"))
-
-optx <- parallel::parLapply(cl, seq(N), job) |> as.numeric()
-
-parallel::stopCluster(cl)
-
-timex <- Sys.time() - timex
-
-hist(optx, main = 'Objective values', xlab = 'Objective value (millions)', ylab = 'Density', col = 'lightblue', border = 'white', breaks = 20L, freq = F, xaxt = "n")
-rngx <- seq(min(optx), max(optx), length.out = 20L)
-axis(1L, at = rngx, labels = round(rngx / 1e6, 1L))
-density(optx) |> lines(main = 'Density of objective values', xlab = 'Objective value (millions)', ylab = 'Density', col = 'red')
+# N <- 1000L
+# Q <- sample(seq(1000L, 3000L, by = 100L), env$tau * env$nI * N, replace = TRUE) |> matrix(nrow = N)
+# 
+# timex <- Sys.time()
+# 
+# cl <- parallel::makeCluster(parallel::detectCores() - 2L)
+# parallel::clusterExport(cl, c("model", "env", "Qdx.1", "Qdx.2", "Q"))
+# 
+# optx <- parallel::parLapply(cl, seq(N), job) |> as.numeric()
+# 
+# parallel::stopCluster(cl)
+# 
+# timex <- Sys.time() - timex
+# 
+# hist(optx, main = 'Objective values', xlab = 'Objective value (millions)', ylab = 'Density', col = 'lightblue', border = 'white', breaks = 20L, freq = F, xaxt = "n")
+# rngx <- seq(min(optx), max(optx), length.out = 20L)
+# axis(1L, at = rngx, labels = round(rngx / 1e6, 1L))
+# density(optx) |> lines(main = 'Density of objective values', xlab = 'Objective value (millions)', ylab = 'Density', col = 'red')
 
 ################################################################################################
 # N <- 100L
