@@ -1,8 +1,8 @@
 library(TLPR)
 
 
-## 12 x 6 x 6 x 20 instance
-n_instances <- 20L
+## 12 x 6 x 6 x 20 instances
+n_instances <- 100L
 
 for (idx in 1L:n_instances) {
   ic <- new.env()
@@ -29,8 +29,8 @@ for (idx in 1L:n_instances) {
     entry_store_coef <- c(20.0, 20.0, 20.0, 20.0, 20.0, 20.0)
     exit_store_coef  <- c(10.0, 10.0, 10.0, 10.0, 10.0, 10.0)
     exit_short_coef  <- c(30.0, 30.0, 30.0, 30.0, 30.0, 30.0)
-    transport_coef   <- runif(length(Ldx), 4.0, 8.0)
-    spot_coef        <- runif(nOrigins * nDestinations * nCarriers * tau, 4.0, 8.0)
+    transport_coef   <- runif(length(Ldx), 6.0, 8.0)
+    spot_coef        <- runif(nOrigins * nDestinations * nCarriers * tau, 3.0, 9.0)
     carrier_capacity <- c(sample(seq(400L, 800L, by = 50L), size = nCarriers * tau, replace = T), rep(40L, nCarriers * tau))
 
     Q <- sample(seq(1000L, 3000L, by = 100L), tau * nOrigins, replace = T)
@@ -49,8 +49,52 @@ for (idx in 1L:n_instances) {
     idx %% 10L, ".json"))
 }
 
-## 12 x 6 x 6 instance (hard-coded)
+## 12 x 2 x 2 x 2 instances
+ic <- new.env()
 
+with(ic, {
+  tau           <- 12L
+  nOrigins      <- 2L
+  nDestinations <- 2L
+  nCarriers     <- 2L
+  nBids         <- 4L
+  Bids          <- replicate(nBids,     sample(nOrigins * nDestinations, size = sample(1L:3L, 1L), replace = F))
+  winners       <- replicate(nCarriers, sample(nBids, size = sample(1L:2L, 1L), replace = F))
+
+  ordx <- unlist(winners, use.names = FALSE)
+  Ldx  <- unlist(Bids[ordx], use.names = FALSE)
+  nLc  <- c(0L, sapply(winners, function(winner) length(unlist(Bids[winner]))))
+
+  entry_stock_0    <- sample(seq(0L, 50L, by = 10L), nOrigins, replace = T)
+  exit_stock_0     <- sample(seq(0L, 50L, by = 10L), nDestinations, replace = T)
+  exit_short_0     <- c(  0L,   0L)
+  entry_capacity   <- c(100L, 100L)
+  exit_capacity    <- c(100L, 100L)
+  flow_support     <- seq(10L, 30L, by = 5L)
+  entry_store_coef <- c(20.0, 20.0)
+  exit_store_coef  <- c(10.0, 10.0)
+  exit_short_coef  <- c(30.0, 30.0)
+  transport_coef   <- runif(length(Ldx), 7.0, 9.9)
+  spot_coef        <- runif(nOrigins * nDestinations * nCarriers * tau, 3.5, 8.0)
+  carrier_capacity <- c(sample(seq(10L, 20L, by = 5L), size = nCarriers * tau, replace = T), rep(5L, nCarriers * tau))
+
+  Q <- sample(seq(10L, 30L, by = 5L), tau * nOrigins, replace = T)
+  D <- sample(seq(10L, 30L, by = 5L), tau * nDestinations, replace = T)
+})
+
+json <- jsonlite::toJSON(sapply(names(ic), get, envir = ic), pretty = TRUE)
+write(json, file = paste0(
+  "~/tsproj/instances/instance_", 
+  ic$tau, 'x', 
+  ic$nOrigins, 'x', 
+  ic$nDestinations, 'x', 
+  ic$nCarriers, "_", 
+  idx %/% 100L, 
+  (idx %/% 10L) %% 10L, 
+  idx %% 10L, ".json"))
+
+
+## 12 x 6 x 6 instance (hard-coded)
 ic <- new.env()
 
 ic$tau           <- 12L
@@ -153,7 +197,7 @@ ic$carrier_capacity <- c(
 json <- jsonlite::toJSON(sapply(names(ic), get, envir = ic), pretty = TRUE)
 write(json, file = paste0("~/tsproj/instances/instance_", ic$tau, 'x', ic$nOrigins, 'x', ic$nDestinations, 'x', ic$nCarriers, "_011.json"))
 
-## 12 x 1 x 1 x 2 instance
+## 12 x 1 x 1 x 2 instances
 ic <- new.env()
 
 ic$tau           <- 12L
