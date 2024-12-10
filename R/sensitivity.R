@@ -30,6 +30,7 @@ genenv <- function(sim) {
   env$nJ  <- sim$nDestinations
   env$I_  <- 1L:env$nI
   env$J_  <- 1L:env$nJ
+  env$L   <- TLPR::CartesianProductX(env$I_, env$J_)
   env$R   <- max(sim$exit_capacity) # exit_capacity
   env$nL  <- env$nI * env$nJ
   env$nCS <- sim$nCarriers
@@ -85,10 +86,13 @@ generate_model <- function(env, init.state, Q, D) {
   model
 }
 
+# Inflow sensitivity
 N <- 1000L
 Q <- sample(seq(1000L, 3000L, by = 100L), 12L * 6L * N, replace = TRUE) |> matrix(nrow = N)
 
-times <- numeric(num_instances)
+cl <- parallel::makeCluster(parallel::detectCores() - 2L)
+
+# times <- numeric(num_instances)
 optx  <- numeric(num_instances * N)
 for (idx in 1L:num_instances) {
   print(idx)
@@ -111,14 +115,13 @@ for (idx in 1L:num_instances) {
     opt$objval
   }
 
-  timex <- Sys.time()
-  cl <- parallel::makeCluster(parallel::detectCores() - 2L)
+  # timex <- Sys.time()
   parallel::clusterExport(cl, c("model", "env", "Qdx.1", "Qdx.2", "Q"))
   optx[(idx - 1L) * N + seq(N)] <- parallel::parLapply(cl, seq(N), job) |> as.numeric()
-  parallel::stopCluster(cl)
-
-  times[idx] <- as.numeric(Sys.time() - timex)
+  # times[idx] <- as.numeric(Sys.time() - timex)
 }
+
+parallel::stopCluster(cl)
 
 # Empty plot
 densities <- apply(matrix(optx, nrow = N), 2L, density)
@@ -127,7 +130,7 @@ ylim <- range(sapply(densities, function(d) d$y))
 # Initialize an empty plot with appropriate limits
 plot(NA, xlim = range(sapply(densities, function(d) d$x)),
      ylim = ylim,
-     xlab = "Total Cost", ylab = "Density", main = "Objective Densities: 100 Instances, 1000 Inflow Samples", xaxt = "n", yaxt = "n")
+     xlab = "Total Cost", ylab = "Density", main = "100 Instances, 1000 Inflow Samples", xaxt = "n", yaxt = "n")
 
 # Add density lines in a loop
 for (i in seq_along(densities)) {
@@ -136,9 +139,67 @@ for (i in seq_along(densities)) {
 rngx <- seq(min(optx), max(optx), length.out = 20L)
 axis(1L, at = rngx, labels = round(rngx / 1e6, 1L))
 rngy <- seq(0.0, ylim[2L], length.out = 4L)
-axis(2L, at = rngy, labels = round(rngy / 1e-06, 1L))
+axis(2L, at = rngy, labels = round(rngy * 1e6, 2L))
 mtext(expression("x"~10^-6), side = 3L, line = 1L, at = par("usr")[1L])
-mtext(expression("x"~10^6), side = 1L, line = 1L, at = par("usr")[2L])
+mtext(expression("x"~10^ 6), side = 1L, line = 1L, at = par("usr")[2L] + 2e4)
+
+
+# Spot rate sensitivity
+N <- 1000L
+spot_coefs <- matrix(runif(sims[[1L]]$nOrigins * sims[[1L]]$nDestinations * sims[[1L]]$nCarriers * sims[[1L]]$tau * N, 3.0, 9.0), nrow = N)
+
+# all(model$obj[c(sdx)] == c(t(env$CTo[1L:env$tau,])))
+
+cl <- parallel::makeCluster(parallel::detectCores() - 2L)
+
+# times <- numeric(num_instances)
+optx  <- numeric(num_instances * N)
+for (idx in 1L:num_instances) {
+  print(idx)
+  env <- genenv(sims[[idx]])
+
+  # Indexing the model object for the spot rates
+  offset   <- env$nI + 2L * env$nJ + env$nL_
+  len_spot <- env$nCO * env$nL
+  sdx <- offset + outer(seq(len_spot), (offset + len_spot) * 0L:(env$tau - 1L), '+')
+
+  init.state <- c(sims[[idx]]$entry_stock_0, c(rbind(sims[[idx]]$exit_stock_0, sims[[idx]]$exit_short_0)))
+  model <- generate_model(env, init.state, sims[[idx]]$Q[-(11L * env$nI + env$I_)], sims[[idx]]$D[-(11L * env$nJ + env$J_)])
+
+  job <- function(k) {
+    model$obj[c(sdx)] <- spot_coefs[k,]
+    opt <- gurobi::gurobi(model, params = list(OutputFlag = 0L))
+    opt$objval
+  }
+
+  # timex <- Sys.time()
+
+  parallel::clusterExport(cl, c("model", "env", "sdx", "spot_coefs"))
+  optx[(idx - 1L) * N + seq(N)] <- parallel::parLapply(cl, seq(N), job) |> as.numeric()
+
+  # times[idx] <- as.numeric(Sys.time() - timex)
+}
+parallel::stopCluster(cl)
+
+# Empty plot
+densities <- apply(matrix(optx, nrow = N), 2L, density)
+
+ylim <- range(sapply(densities, function(d) d$y))
+# Initialize an empty plot with appropriate limits
+plot(NA, xlim = range(sapply(densities, function(d) d$x)),
+     ylim = ylim,
+     xlab = "Total Cost", ylab = "Density", main = "100 Instances, 1000 Spot Rate Samples", xaxt = "n", yaxt = "n")
+
+# Add density lines in a loop
+for (i in seq_along(densities)) {
+  lines(densities[[i]], col = rgb(0.0, 0.0, 0.0, alpha = 0.2), lwd = 2L)
+}
+rngx <- seq(min(optx), max(optx), length.out = 20L)
+axis(1L, at = rngx, labels = round(rngx / 1e6, 1L))
+rngy <- seq(0.0, ylim[2L], length.out = 4L)
+axis(2L, at = rngy, labels = round(rngy, 4L))
+# mtext(expression("x"~10^-6), side = 3L, line = 1L, at = par("usr")[1L])
+mtext(expression("x"~10^6), side = 1L, line = 1L, at = par("usr")[2L] + 2e4)
 
 # ## Operations optimization
 # opt <- gurobi::gurobi(model, params = list(OutputFlag = 0L))
