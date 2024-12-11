@@ -17,11 +17,11 @@ genenv <- function(sim) {
   env$R   <- max(sim$exit_capacity) # exit_capacity
   env$nL  <- env$nI * env$nJ
   env$nCS <- sim$nCarriers
-  env$nCO <- sim$nCarriers
+  env$nCO <- sim$nSpotCarriers
   # env$Cb  <- matrix(sim$carrier_capacity[-((sim$tau-1)*sim$nCarriers+1L:sim$nCarriers)], nrow = env$tau)
   # env$Co  <- matrix(rep(0L, env$nCO * env$tau), nrow = env$tau)
   env$Cb  <- matrix(sim$carrier_capacity[1L:(sim$nCarriers * sim$tau)], nrow = sim$tau)
-  env$Co  <- matrix(sim$carrier_capacity[(sim$nCarriers * sim$tau + 1L):(2L * sim$nCarriers * sim$tau)], nrow = sim$tau)
+  env$Co  <- matrix(sim$carrier_capacity[(sim$nCarriers * sim$tau + 1L):((sim$nCarriers + sim$nSpotCarriers) * sim$tau)], nrow = sim$tau)
   env$nLc <- sim$nLc
   env$L_  <- sim$Ldx
   env$nL_ <- length(sim$Ldx)
@@ -74,7 +74,9 @@ model$modelsense <- 'min'
 model$vtype <- rep('I', ncol(model$A))
 
 ## Operations optimization
-opt <- gurobi::gurobi(model, params = list(OutputFlag = 0L))
+time <- system.time({
+  opt <- gurobi::gurobi(model, params = list(OutputFlag = 0L))
+})
 
 post_hoc_simulation <- function(env, x) {
   S.I <- matrix(NA, nrow = (env$tau + 1L) * env$nI, ncol = 1L)
@@ -84,13 +86,14 @@ post_hoc_simulation <- function(env, x) {
   offset <- env$nI + 2L * env$nJ
   blk    <- offset + env$nvars
 
+  jdx <- seq(1L, 2L * env$nI, by = 2L)
   for (t in seq(env$tau + 1L)) {
     i <- (t - 1L) * env$nI + env$I_
     j <- (t - 1L) * env$nJ + env$J_
     idx <- (t - 1L) * blk + seq(blk)
     
     S.I[i, 1L] <- x[idx][env$I_]
-    S.J[j, 1L] <- x[idx][env$nI + c(1L,3L)] - x[idx][env$nI + c(2L,4L)]
+    S.J[j, 1L] <- x[idx][env$nI + jdx] - x[idx][env$nI + jdx + 1L]
     
     if (t > env$tau) 
       break
